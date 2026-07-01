@@ -6,7 +6,7 @@ export default defineConfig({
   manifest: {
     name: 'Free Job Autofiller',
     description:
-      'Automatically fills job applications on Greenhouse, Lever, Workday and any company career page — from your saved profile. Per-field fill, cover letter, EEO answers, resume upload. Optional Claude AI for essay questions. Free, private, no data leaves your browser.',
+      'Auto-fill job applications on Greenhouse, Lever, Workday & any career page. Resume, cover letter, EEO fields. Free & private.',
     permissions: ['storage'],
     host_permissions: [
       '*://*.greenhouse.io/*',
