@@ -495,6 +495,31 @@ export function OptionsApp() {
       <section className="card">
         <h2>🤖 Claude (LLM) Settings</h2>
         <div className="grid">
+          <div className="field">
+            <label>Autofill master switch</label>
+            <div className="tristate">
+              <button
+                type="button"
+                className={settings.autofillEnabled ? 'active' : ''}
+                onClick={() => {
+                  setSettings(update(settings, { autofillEnabled: true }));
+                  setDirty(true);
+                }}
+              >
+                On
+              </button>
+              <button
+                type="button"
+                className={!settings.autofillEnabled ? 'active' : ''}
+                onClick={() => {
+                  setSettings(update(settings, { autofillEnabled: false }));
+                  setDirty(true);
+                }}
+              >
+                Off
+              </button>
+            </div>
+          </div>
           <Text
             label="Anthropic API key (stored locally)"
             full

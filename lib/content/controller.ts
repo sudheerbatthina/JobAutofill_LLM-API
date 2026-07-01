@@ -2,7 +2,7 @@ import { pickAdapter } from '@/lib/ats/registry';
 import { resolveValue } from '@/lib/fields/resolve';
 import { injectFile, injectResumeFile, fillField } from '@/lib/fields/inject';
 import { OverlayManager, type FieldAction } from '@/lib/ui/overlay';
-import { getProfile, getResume, getCoverLetterFile, watchProfile } from '@/lib/profile/storage';
+import { getProfile, getResume, getCoverLetterFile, getSettings, watchProfile, watchSettings } from '@/lib/profile/storage';
 import type { AtsAdapter, DetectedField } from '@/lib/fields/types';
 import type { Profile } from '@/lib/profile/schema';
 import { dataUrlToFile } from '@/lib/util/file';
@@ -17,9 +17,12 @@ export class Controller {
   private adapter: AtsAdapter;
   private overlay: OverlayManager;
   private profile: Profile | null = null;
+  private enabled = true;
   private fields: DetectedField[] = [];
   private observer?: MutationObserver;
   private debounce?: ReturnType<typeof setTimeout>;
+  private unwatchProfile?: () => void;
+  private unwatchSettings?: () => void;
 
   constructor(private doc: Document = document) {
     this.adapter = pickAdapter(new URL(location.href), doc);
@@ -28,8 +31,13 @@ export class Controller {
 
   async start(): Promise<void> {
     this.profile = await getProfile();
-    watchProfile((p) => {
+    this.enabled = (await getSettings()).autofillEnabled;
+    this.unwatchProfile = watchProfile((p) => {
       this.profile = p;
+      this.refresh();
+    });
+    this.unwatchSettings = watchSettings((settings) => {
+      this.enabled = settings.autofillEnabled;
       this.refresh();
     });
     this.refresh();
@@ -38,6 +46,11 @@ export class Controller {
 
   /** Re-detect and re-render the per-field icons. */
   refresh = (): void => {
+    if (!this.enabled) {
+      this.fields = [];
+      this.overlay.sync([]);
+      return;
+    }
     this.fields = this.adapter.detect(this.doc);
     // Only show UI when this looks like an application form (avoid noise).
     if (!this.looksLikeApplication()) {
@@ -109,6 +122,8 @@ export class Controller {
 
   /** Fill every field we have a value for. Returns count filled. */
   async fillAll(): Promise<number> {
+    if (!this.enabled) return 0;
+
     if (this.profile) {
       const expanded = await expandRepeatableSections(this.doc);
       if (expanded) this.refresh();
@@ -171,6 +186,8 @@ export class Controller {
 
   destroy(): void {
     this.observer?.disconnect();
+    this.unwatchProfile?.();
+    this.unwatchSettings?.();
     this.overlay.destroy();
   }
 }

@@ -31,6 +31,8 @@ const coverLetterFileItem = storage.defineItem<ResumeFile | null>('local:coverLe
 
 /** Extension settings, incl. the bring-your-own Anthropic API key. */
 export interface Settings {
+  /** Master switch for content-script autofill UI and actions. */
+  autofillEnabled: boolean;
   anthropicApiKey: string;
   /** Model used for resume structuring + essay drafts. */
   model: string;
@@ -38,6 +40,7 @@ export interface Settings {
   llmEnabled: boolean;
 }
 const defaultSettings: Settings = {
+  autofillEnabled: true,
   anthropicApiKey: '',
   model: 'claude-sonnet-4-6',
   llmEnabled: true,
@@ -81,5 +84,9 @@ export async function getSettings(): Promise<Settings> {
 }
 
 export async function setSettings(settings: Settings): Promise<void> {
-  await settingsItem.setValue(settings);
+  await settingsItem.setValue({ ...defaultSettings, ...settings });
+}
+
+export function watchSettings(cb: (settings: Settings) => void): () => void {
+  return settingsItem.watch((raw) => cb({ ...defaultSettings, ...raw }));
 }
