@@ -1,6 +1,6 @@
 import { pickAdapter } from '@/lib/ats/registry';
 import { resolveValue } from '@/lib/fields/resolve';
-import { injectFile, fillField } from '@/lib/fields/inject';
+import { injectFile, injectResumeFile, fillField } from '@/lib/fields/inject';
 import { OverlayManager, type FieldAction } from '@/lib/ui/overlay';
 import { getProfile, getResume, getCoverLetterFile, watchProfile } from '@/lib/profile/storage';
 import type { AtsAdapter, DetectedField } from '@/lib/fields/types';
@@ -91,7 +91,10 @@ export class Controller {
       const resume = await getResume();
       if (!resume) return false;
       const file = dataUrlToFile(resume.dataUrl, resume.name, resume.type);
-      const ok = injectFile(field.element as HTMLInputElement, file);
+      const ok =
+        field.element instanceof HTMLInputElement && field.element.type === 'file'
+          ? injectFile(field.element, file)
+          : injectResumeFile(field.element, file);
       if (ok) this.overlay.flash(field);
       return ok;
     }
@@ -112,6 +115,14 @@ export class Controller {
     }
 
     let count = 0;
+    if (!this.fields.some((field) => field.kind === 'resume')) {
+      const resume = await getResume();
+      if (resume) {
+        const file = dataUrlToFile(resume.dataUrl, resume.name, resume.type);
+        if (injectResumeFile(this.doc, file)) count++;
+      }
+    }
+
     for (const field of this.fields) {
       const ok = await this.fillOne(field);
       if (ok) count++;

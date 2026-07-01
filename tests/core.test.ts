@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { genericAdapter } from '@/lib/ats/generic';
 import { classify, extractLabel, buildField } from '@/lib/fields/detect';
 import { resolveValue } from '@/lib/fields/resolve';
-import { fillField } from '@/lib/fields/inject';
+import { fillField, injectResumeFile } from '@/lib/fields/inject';
 import { ProfileSchema, type Profile } from '@/lib/profile/schema';
 import type { DetectedField } from '@/lib/fields/types';
 import { hasApplicationContext } from '@/lib/content/applicationGate';
@@ -316,6 +316,41 @@ describe('injection', () => {
     await fillField(field, { value: 'No', boolValue: false });
     const checked = document.querySelector('input[name="a"]:checked') as HTMLInputElement;
     expect(checked.value).toBe('no');
+  });
+
+  it('uploads a resume through a hidden file input in a drop zone', () => {
+    setBody(`
+      <section>
+        <h2>Autofill with Resume</h2>
+        <div class="upload-dropzone">Drop file here or Select file</div>
+        <input id="resume" type="file" accept=".pdf,.doc,.docx" style="display:none" />
+      </section>
+    `);
+    const input = document.getElementById('resume') as HTMLInputElement;
+    let changed = false;
+    input.addEventListener('change', () => {
+      changed = true;
+    });
+    const file = new File(['resume'], 'resume.pdf', { type: 'application/pdf' });
+    expect(injectResumeFile(document, file)).toBe(true);
+    expect(input.files?.[0]?.name).toBe('resume.pdf');
+    expect(changed).toBe(true);
+  });
+
+  it('falls back to dispatching drop events on a resume drop zone', () => {
+    setBody(`
+      <section>
+        <h2>Resume/CV</h2>
+        <div id="drop" class="upload-dropzone">Drop file here or Select file</div>
+      </section>
+    `);
+    let dropped = false;
+    document.getElementById('drop')!.addEventListener('drop', () => {
+      dropped = true;
+    });
+    const file = new File(['resume'], 'resume.pdf', { type: 'application/pdf' });
+    expect(injectResumeFile(document, file)).toBe(true);
+    expect(dropped).toBe(true);
   });
 });
 

@@ -209,13 +209,118 @@ export function injectFile(input: HTMLInputElement, file: File): boolean {
     const dt = new DataTransfer();
     dt.items.add(file);
     input.files = dt.files;
-    input.dispatchEvent(new DragEvent('dragenter', { bubbles: true, dataTransfer: dt }));
-    input.dispatchEvent(new DragEvent('drop', { bubbles: true, dataTransfer: dt }));
+    dispatchDrag(input, 'dragenter', dt);
+    dispatchDrag(input, 'dragover', dt);
+    dispatchDrag(input, 'drop', dt);
     dispatchValueCommitted(input, file.name);
     return true;
   } catch {
     return false;
   }
+}
+
+export function injectResumeFile(target: Document | HTMLElement, file: File): boolean {
+  const isDoc = target.nodeType === Node.DOCUMENT_NODE;
+  const doc = isDoc ? (target as Document) : (target as HTMLElement).ownerDocument;
+  const root = isDoc ? (doc.documentElement ?? doc) : (target as HTMLElement);
+  const candidates = collectFileInputs(root);
+  const ranked = candidates
+    .map((input) => ({ input, score: resumeInputScore(input) }))
+    .filter((candidate) => candidate.score > 0)
+    .sort((a, b) => b.score - a.score);
+  const inputs = ranked.length ? ranked.map((candidate) => candidate.input) : candidates;
+
+  for (const input of inputs) {
+    if (injectFile(input, file)) {
+      dispatchDropOnUploadZones(doc, file, input);
+      return true;
+    }
+  }
+
+  return dispatchDropOnUploadZones(doc, file, null);
+}
+
+function collectFileInputs(root: Document | ShadowRoot | Element): HTMLInputElement[] {
+  const out: HTMLInputElement[] = [];
+  root.querySelectorAll<HTMLInputElement>('input[type="file"]').forEach((input) => out.push(input));
+  root.querySelectorAll<HTMLElement>('*').forEach((el) => {
+    const sr = (el as Element & { shadowRoot?: ShadowRoot | null }).shadowRoot;
+    if (sr) out.push(...collectFileInputs(sr));
+  });
+  return out;
+}
+
+function resumeInputScore(input: HTMLInputElement): number {
+  const context = [
+    input.accept,
+    input.name,
+    input.id,
+    input.getAttribute('aria-label') ?? '',
+    input.getAttribute('data-automation-id') ?? '',
+    input.closest('label, section, form, div')?.textContent ?? '',
+  ]
+    .join(' ')
+    .toLowerCase();
+  let score = 0;
+  if (/\b(resume|cv|curriculum vitae)\b/.test(context)) score += 4;
+  if (/\b(upload|drop|select file|attachment|file)\b/.test(context)) score += 2;
+  if (/\.(pdf|doc|docx)|pdf|msword|word/.test(context)) score += 1;
+  if (/\b(cover letter|transcript|portfolio|photo|image)\b/.test(context)) score -= 4;
+  return score;
+}
+
+function dispatchDropOnUploadZones(doc: Document, file: File, input: HTMLInputElement | null): boolean {
+  const dt = new DataTransfer();
+  dt.items.add(file);
+  const zones = collectUploadZones(doc, input);
+  let dispatched = false;
+  for (const zone of zones) {
+    dispatchDrag(zone, 'dragenter', dt);
+    dispatchDrag(zone, 'dragover', dt);
+    dispatchDrag(zone, 'drop', dt);
+    dispatchValueCommitted(zone, file.name);
+    dispatched = true;
+  }
+  return dispatched;
+}
+
+function collectUploadZones(doc: Document, input: HTMLInputElement | null): HTMLElement[] {
+  const direct = input
+    ? ancestors(input).filter((el) => uploadZoneScore(el) > 0)
+    : [];
+  const global = Array.from(
+    doc.querySelectorAll<HTMLElement>(
+      '[class*="drop"], [class*="upload"], [id*="drop"], [id*="upload"], [data-automation-id*="upload"], [role="button"], button, a',
+    ),
+  ).filter((el) => uploadZoneScore(el) > 0);
+  return Array.from(new Set([...direct, ...global])).slice(0, 6);
+}
+
+function ancestors(el: HTMLElement): HTMLElement[] {
+  const out: HTMLElement[] = [];
+  let node: HTMLElement | null = el;
+  while (node && out.length < 8) {
+    out.push(node);
+    node = node.parentElement;
+  }
+  return out;
+}
+
+function uploadZoneScore(el: HTMLElement): number {
+  const text = [
+    el.textContent ?? '',
+    el.id,
+    el.className,
+    el.getAttribute('aria-label') ?? '',
+    el.getAttribute('data-automation-id') ?? '',
+  ]
+    .join(' ')
+    .toLowerCase();
+  let score = 0;
+  if (/\b(resume|cv|curriculum vitae)\b/.test(text)) score += 4;
+  if (/\b(drop file|drop files|select file|select files|upload|browse)\b/.test(text)) score += 2;
+  if (/\b(cover letter|transcript|portfolio|photo|image)\b/.test(text)) score -= 4;
+  return score;
 }
 
 function delay(ms: number): Promise<void> {
@@ -241,6 +346,14 @@ function dispatchBeforeInput(el: HTMLElement, value: string): void {
       }),
     );
   }
+}
+
+function dispatchDrag(el: HTMLElement, type: string, dataTransfer: DataTransfer): void {
+  if (typeof DragEvent !== 'undefined') {
+    el.dispatchEvent(new DragEvent(type, { bubbles: true, composed: true, dataTransfer }));
+    return;
+  }
+  el.dispatchEvent(new Event(type, { bubbles: true, composed: true }));
 }
 
 function dispatchValueCommitted(el: HTMLElement, value: string): void {
