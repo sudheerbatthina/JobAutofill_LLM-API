@@ -5,6 +5,7 @@ import { resolveValue } from '@/lib/fields/resolve';
 import { fillField } from '@/lib/fields/inject';
 import { ProfileSchema, type Profile } from '@/lib/profile/schema';
 import type { DetectedField } from '@/lib/fields/types';
+import { hasApplicationContext } from '@/lib/content/applicationGate';
 
 const profile: Profile = ProfileSchema.parse({
   personal: {
@@ -56,14 +57,18 @@ describe('classification', () => {
 
   const cases: [string, string][] = [
     ['First Name', 'firstName'],
+    ['Middle Name', 'middleName'],
     ['Last Name', 'lastName'],
     ['Email', 'email'],
     ['Phone', 'phone'],
+    ['Phone Extension', 'phoneExtension'],
     ['LinkedIn Profile', 'linkedin'],
     ['GitHub', 'github'],
     ['School', 'school'],
     ['Are you authorized to work in the US?', 'authorizedToWork'],
     ['Will you now or in the future require sponsorship?', 'requireSponsorship'],
+    ['Have you been employed by Acme previously?', 'previouslyEmployed'],
+    ['How did you hear about us?', 'referralSource'],
     ['Gender', 'gender'],
   ];
 
@@ -81,6 +86,34 @@ describe('classification', () => {
     const res = classify(el, '');
     expect(res.kind).toBe('lastName');
     expect(res.confidence).toBeGreaterThan(0.9);
+  });
+
+  it('does not treat middle name as full name', () => {
+    setBody('<input />');
+    const el = document.querySelector('input')!;
+    expect(classify(el, 'Middle Name').kind).toBe('middleName');
+  });
+});
+
+describe('application page gating', () => {
+  beforeEach(() => setBody(''));
+
+  it('does not activate on a generic chat/upload page', () => {
+    document.title = 'Chat';
+    setBody(`
+      <main>
+        <h1>What's on your mind today?</h1>
+        <input type="file" />
+        <textarea aria-label="Ask anything"></textarea>
+      </main>
+    `);
+    expect(hasApplicationContext(document, 0)).toBe(false);
+  });
+
+  it('activates on a job application page', () => {
+    document.title = 'Job Application';
+    setBody('<form><h1>Submit application</h1><label>Resume</label><input type="file" /></form>');
+    expect(hasApplicationContext(document, 1)).toBe(true);
   });
 });
 
@@ -127,6 +160,23 @@ describe('generic adapter detection (Greenhouse-like form)', () => {
     const fields = genericAdapter.detect(document);
     expect(fieldByKind(fields, 'email')!.required).toBe(true);
   });
+
+  it('keeps address subfields mapped independently when labels are grouped', () => {
+    setBody(`
+      <section>
+        <h2>Address</h2>
+        <label>Address Line 1</label><input id="addr" />
+        <label>City</label><input id="city" />
+        <label>Postal Code</label><input id="zip" />
+        <label>County</label><input id="county" />
+      </section>
+    `);
+    const byId = Object.fromEntries(genericAdapter.detect(document).map((field) => [field.element.id, field.kind]));
+    expect(byId.addr).toBe('address');
+    expect(byId.city).toBe('city');
+    expect(byId.zip).toBe('zip');
+    expect(byId.county).toBe('county');
+  });
 });
 
 describe('value resolution', () => {
@@ -136,6 +186,7 @@ describe('value resolution', () => {
     const mk = (kind: string): DetectedField => ({ ...buildField(el), kind: kind as any });
     expect(resolveValue(mk('email'), profile)?.value).toBe('ada@example.com');
     expect(resolveValue(mk('fullName'), profile)?.value).toBe('Ada Lovelace');
+    expect(resolveValue(mk('middleName'), profile)).toBeNull();
     expect(resolveValue(mk('school'), profile)?.value).toBe('MIT');
     expect(resolveValue(mk('jobTitle'), profile)?.value).toBe('Engineer');
     expect(resolveValue(mk('linkedin'), profile)?.value).toBe('https://linkedin.com/in/ada');
@@ -147,6 +198,15 @@ describe('value resolution', () => {
     const mk = (kind: string): DetectedField => ({ ...buildField(el), kind: kind as any });
     expect(resolveValue(mk('authorizedToWork'), profile)).toEqual({ value: 'Yes', boolValue: true });
     expect(resolveValue(mk('requireSponsorship'), profile)).toEqual({ value: 'No', boolValue: false });
+    expect(resolveValue(mk('previouslyEmployed'), profile)).toEqual({ value: 'No', boolValue: false });
+  });
+
+  it('resolves common default application values', () => {
+    setBody('<input />');
+    const el = document.querySelector('input')!;
+    const mk = (kind: string): DetectedField => ({ ...buildField(el), kind: kind as any });
+    expect(resolveValue(mk('phoneExtension'), profile)).toEqual({ value: '1' });
+    expect(resolveValue(mk('referralSource'), profile)?.aliases).toContain('Job Posting');
   });
 
   it('returns null for unknown / missing data', () => {
@@ -177,6 +237,18 @@ describe('injection', () => {
     const ok = await fillField(field, { value: 'Yes' });
     expect(ok).toBe(true);
     expect(el.value).toBe('Yes');
+  });
+
+  it('selects a referral-source alias in a native select', async () => {
+    setBody('<select id="s"><option value="">--</option><option>Job Postings</option><option>Referral</option></select>');
+    const el = document.getElementById('s') as HTMLSelectElement;
+    const field = buildField(el);
+    const ok = await fillField(field, {
+      value: 'Careers Website',
+      aliases: ['Career Site', 'Job Posting', 'Job Postings'],
+    });
+    expect(ok).toBe(true);
+    expect(el.value).toBe('Job Postings');
   });
 
   it('selects the correct radio for a yes/no answer', async () => {

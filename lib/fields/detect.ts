@@ -38,7 +38,18 @@ export function extractLabel(el: HTMLElement): string {
   // 5. preceding sibling label-ish element within the same field container
   const container = el.closest('div, fieldset, section, li, p');
   if (container) {
-    const lbl = container.querySelector('label, .label, legend');
+    const prev = nearestPreviousLabel(el, container);
+    if (prev) return clean(prev);
+
+    // Only trust a container-level label when that container owns one control.
+    // Large grouped sections often contain Address Line 1, City, Zip, etc.; using
+    // the first label there causes every field in the section to become address.
+    const controls = Array.from(
+      container.querySelectorAll<HTMLElement>(
+        'input, select, textarea, [contenteditable="true"], [role="combobox"]',
+      ),
+    ).filter((candidate) => candidate === el || isFillable(candidate));
+    const lbl = controls.length <= 1 ? container.querySelector('label, .label, legend') : null;
     if (lbl?.textContent?.trim()) return clean(lbl.textContent);
   }
 
@@ -59,6 +70,21 @@ function cssEscape(s: string): string {
   // Prefer native CSS.escape when available.
   if (typeof CSS !== 'undefined' && CSS.escape) return CSS.escape(s);
   return s.replace(/["\\]/g, '\\$&');
+}
+
+function nearestPreviousLabel(el: HTMLElement, boundary: Element): string {
+  let node = el.previousElementSibling;
+  while (node && node !== boundary) {
+    if (node.matches('label, .label, legend')) {
+      const text = node.textContent?.trim() ?? '';
+      if (text) return text;
+    }
+    if (node.querySelector('input, select, textarea, [contenteditable="true"], [role="combobox"]')) {
+      break;
+    }
+    node = node.previousElementSibling;
+  }
+  return '';
 }
 
 /** Normalise text for matching: lowercase, collapse non-alphanumerics. */
@@ -83,22 +109,26 @@ const RULES: Rule[] = [
   // Patterns are camelCase-tolerant (optional spaces) so collapsed ids like
   // "legalNameSection_firstName" -> "legalnamesection firstname" still match.
   { kind: 'email', any: [/e ?mail/] },
-  { kind: 'phone', any: [/phone/, /mobile/, /\btel\b/, /telephone/, /cell\b/] },
+  { kind: 'phoneExtension', any: [/phone.*ext/, /\bext(ension)?\b/] },
   { kind: 'firstName', any: [/first ?name/, /given ?name/, /\bfname\b/, /forename/] },
+  { kind: 'middleName', any: [/middle ?name/, /\bmname\b/, /middle initial/] },
   { kind: 'lastName', any: [/last ?name/, /family ?name/, /surname/, /\blname\b/] },
   {
     kind: 'fullName',
     any: [/full ?name/, /your ?name/, /legal ?name/, /applicant ?name/, /\bname\b/],
-    not: [/first/, /last/, /user ?name/, /company/, /file ?name/, /school/, /event/],
+    not: [/first/, /middle/, /last/, /user ?name/, /company/, /file ?name/, /school/, /event/],
   },
+  { kind: 'phone', any: [/phone/, /mobile/, /\btel\b/, /telephone/, /cell\b/], not: [/\bext(ension)?\b/] },
   { kind: 'linkedin', any: [/linked ?in/] },
   { kind: 'github', any: [/git ?hub/] },
   { kind: 'portfolio', any: [/portfolio/, /personal site/] },
   { kind: 'website', any: [/website/, /\burl\b/, /web site/], not: [/portfolio/] },
-  { kind: 'address', any: [/street/, /address line/, /\baddress\b/], not: [/email/, /ip/] },
+  { kind: 'addressLine2', any: [/address line 2/, /address 2/, /apt/, /apartment/, /suite/] },
   { kind: 'city', any: [/\bcity\b/, /town/] },
   { kind: 'state', any: [/\bstate\b/, /province/, /region/] },
   { kind: 'zip', any: [/zip/, /postal/, /post code/] },
+  { kind: 'county', any: [/\bcounty\b/] },
+  { kind: 'address', any: [/street/, /address line 1/, /address 1/, /\baddress\b/], not: [/email/, /ip/, /\bcity\b/, /\bstate\b/, /province/, /region/, /zip/, /postal/, /\bcounty\b/] },
   { kind: 'country', any: [/country/] },
   { kind: 'school', any: [/school/, /university/, /college/, /institution/] },
   { kind: 'degree', any: [/degree/, /qualification/] },
@@ -113,6 +143,14 @@ const RULES: Rule[] = [
   {
     kind: 'requireSponsorship',
     any: [/sponsor/, /require.*visa/, /need.*sponsorship/],
+  },
+  {
+    kind: 'previouslyEmployed',
+    any: [/previously employed/, /worked.*previously/, /employed.*previously/, /worked.*before/, /former employee/],
+  },
+  {
+    kind: 'referralSource',
+    any: [/how.*hear/, /hear.*about/, /source/, /where.*find/, /how.*learn.*(job|role|position)/],
   },
   { kind: 'visaStatus', any: [/visa/, /work permit/, /citizenship status/, /immigration/] },
   { kind: 'hispanicLatino', any: [/hispanic/, /latino/, /latinx/] },
@@ -144,12 +182,15 @@ export function classify(el: HTMLElement, label: string): { kind: FieldKind; con
   const ac = el.getAttribute('autocomplete') ?? '';
   const acMap: Record<string, FieldKind> = {
     'given-name': 'firstName',
+    'additional-name': 'middleName',
     'family-name': 'lastName',
     name: 'fullName',
     email: 'email',
     tel: 'phone',
+    'tel-extension': 'phoneExtension',
     'street-address': 'address',
     'address-line1': 'address',
+    'address-line2': 'addressLine2',
     'address-level2': 'city',
     'address-level1': 'state',
     'postal-code': 'zip',

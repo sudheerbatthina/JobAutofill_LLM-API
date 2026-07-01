@@ -17,6 +17,8 @@ export function resolveValue(field: DetectedField, profile: Profile): ResolvedVa
   switch (field.kind) {
     case 'firstName':
       return text(personal.firstName);
+    case 'middleName':
+      return null;
     case 'lastName':
       return text(personal.lastName);
     case 'fullName':
@@ -25,14 +27,20 @@ export function resolveValue(field: DetectedField, profile: Profile): ResolvedVa
       return text(personal.email);
     case 'phone':
       return text(personal.phone);
+    case 'phoneExtension':
+      return { value: '1' };
     case 'address':
       return text(personal.addressLine1);
+    case 'addressLine2':
+      return null;
     case 'city':
       return text(personal.city);
     case 'state':
       return text(personal.state);
     case 'zip':
       return text(personal.zip);
+    case 'county':
+      return null;
     case 'country':
       return text(personal.country);
     case 'linkedin':
@@ -71,6 +79,13 @@ export function resolveValue(field: DetectedField, profile: Profile): ResolvedVa
       return text(eeo.hispanicLatino);
     case 'summary':
       return text(profile.summary);
+    case 'previouslyEmployed':
+      return { value: 'No', boolValue: false };
+    case 'referralSource':
+      return {
+        value: 'Careers Website',
+        aliases: ['Career Site', 'Careers Site', 'Job Posting', 'Job Postings', 'Job Board'],
+      };
 
     case 'authorizedToWork': {
       if (workAuth.authorizedToWorkUS == null) return null;

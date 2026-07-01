@@ -36,16 +36,19 @@ function fillTextLike(el: HTMLElement, value: string): boolean {
   return false;
 }
 
-function fillSelect(el: HTMLSelectElement, value: string): boolean {
-  const target = norm(value);
+function fillSelect(el: HTMLSelectElement, resolved: ResolvedValue): boolean {
+  const targets = candidateValues(resolved);
   let match: HTMLOptionElement | undefined;
   // exact, then startsWith, then includes
   for (const test of [
-    (o: string) => o === target,
-    (o: string) => o.startsWith(target) || target.startsWith(o),
-    (o: string) => o.includes(target) || target.includes(o),
+    (option: string, target: string) => option === target,
+    (option: string, target: string) => option.startsWith(target) || target.startsWith(option),
+    (option: string, target: string) => option.includes(target) || target.includes(option),
   ]) {
-    match = Array.from(el.options).find((o) => o.value && test(norm(o.textContent || o.value)));
+    for (const target of targets) {
+      match = Array.from(el.options).find((o) => o.value && test(norm(o.textContent || o.value), target));
+      if (match) break;
+    }
     if (match) break;
   }
   if (!match) return false;
@@ -58,7 +61,7 @@ function fillSelect(el: HTMLSelectElement, value: string): boolean {
 function fillRadio(field: DetectedField, resolved: ResolvedValue): boolean {
   const options = field.groupElements ?? [field.element];
   const want = resolved.boolValue;
-  const wantText = norm(resolved.value);
+  const wantTexts = candidateValues(resolved);
 
   const labelFor = (input: HTMLElement): string => {
     const id = input.getAttribute('id');
@@ -76,10 +79,10 @@ function fillRadio(field: DetectedField, resolved: ResolvedValue): boolean {
     const t = labelFor(o);
     if (want === true) return /^y/.test(t) || t === 'true';
     if (want === false) return /^n/.test(t) || t === 'false';
-    return t === wantText || t.includes(wantText);
+    return wantTexts.some((wantText) => t === wantText || t.includes(wantText));
   });
   // Fallback: match on the raw value text.
-  if (!target) target = options.find((o) => labelFor(o).includes(wantText));
+  if (!target) target = options.find((o) => wantTexts.some((wantText) => labelFor(o).includes(wantText)));
   if (!target) return false;
 
   (target as HTMLInputElement).focus();
@@ -103,13 +106,13 @@ export async function fillField(field: DetectedField, resolved: ResolvedValue): 
     case 'text':
       return fillTextLike(el, resolved.value);
     case 'select':
-      return fillSelect(el as HTMLSelectElement, resolved.value);
+      return fillSelect(el as HTMLSelectElement, resolved);
     case 'radio':
       return fillRadio(field, resolved);
     case 'checkbox':
       return fillCheckbox(el as HTMLInputElement, resolved);
     case 'react-select':
-      return fillReactSelect(el, resolved.value);
+      return fillReactSelect(el, resolved);
     case 'file':
       return false; // handled by injectFile()
     default:
@@ -122,7 +125,8 @@ export async function fillField(field: DetectedField, resolved: ResolvedValue): 
  * query, wait for options to render, then click the best match. Greenhouse's
  * adapter relies on this with an added settle delay.
  */
-export async function fillReactSelect(el: HTMLElement, value: string): Promise<boolean> {
+export async function fillReactSelect(el: HTMLElement, resolved: ResolvedValue): Promise<boolean> {
+  const [value, ...aliases] = [resolved.value, ...(resolved.aliases ?? [])];
   const input = (el.matches('input') ? el : el.querySelector('input')) as HTMLInputElement | null;
   const opener = input ?? el;
   opener.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
@@ -134,12 +138,12 @@ export async function fillReactSelect(el: HTMLElement, value: string): Promise<b
   await delay(300); // let the options portal render
 
   const doc = el.ownerDocument;
-  const want = norm(value);
+  const wants = [value, ...aliases].map(norm).filter(Boolean);
   const options = Array.from(
     doc.querySelectorAll('[role="option"], [class*="option"]'),
   ) as HTMLElement[];
-  let match = options.find((o) => norm(o.textContent || '') === want);
-  if (!match) match = options.find((o) => norm(o.textContent || '').includes(want));
+  let match = options.find((o) => wants.some((want) => norm(o.textContent || '') === want));
+  if (!match) match = options.find((o) => wants.some((want) => norm(o.textContent || '').includes(want)));
   if (!match) {
     opener.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
     return false;
@@ -172,6 +176,10 @@ function delay(ms: number): Promise<void> {
 
 function norm(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function candidateValues(resolved: ResolvedValue): string[] {
+  return [resolved.value, ...(resolved.aliases ?? [])].map(norm).filter(Boolean);
 }
 
 function cssEscape(s: string): string {

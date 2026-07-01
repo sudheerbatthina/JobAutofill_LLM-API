@@ -6,6 +6,7 @@ import { getProfile, getResume, getCoverLetterFile, watchProfile } from '@/lib/p
 import type { AtsAdapter, DetectedField } from '@/lib/fields/types';
 import type { Profile } from '@/lib/profile/schema';
 import { dataUrlToFile } from '@/lib/util/file';
+import { hasApplicationContext } from './applicationGate';
 
 /**
  * Orchestrates detection + the per-field UI on a single page. One instance per
@@ -48,8 +49,11 @@ export class Controller {
   private looksLikeApplication(): boolean {
     if (this.adapter.name !== 'generic') return true;
     const known = this.fields.filter((f) => f.kind !== 'unknown');
-    const hasResume = this.fields.some((f) => f.kind === 'resume' || f.control === 'file');
-    return known.length >= 2 || hasResume;
+    const hasResumeOrCoverLetter = this.fields.some((f) => f.kind === 'resume' || f.kind === 'coverLetter');
+    const hasJobSpecificQuestion = this.fields.some((f) =>
+      ['authorizedToWork', 'requireSponsorship', 'previouslyEmployed', 'referralSource'].includes(f.kind),
+    );
+    return hasApplicationContext(this.doc, known.length) && (known.length >= 3 || hasResumeOrCoverLetter || hasJobSpecificQuestion);
   }
 
   private toAction(field: DetectedField): FieldAction {
@@ -59,7 +63,10 @@ export class Controller {
       (field.kind === 'unknown' || field.kind === 'summary' || field.kind === 'coverLetter');
     return {
       field,
-      fillable: !!resolved || field.kind === 'resume' || field.control === 'file',
+      fillable:
+        !!resolved ||
+        field.kind === 'resume' ||
+        (field.kind === 'coverLetter' && field.control === 'file'),
       canGenerate: isFreeText,
       onFill: () => this.fillOne(field),
       onGenerate: isFreeText ? () => this.generateFor(field) : undefined,
@@ -77,8 +84,9 @@ export class Controller {
       return ok;
     }
 
-    // Resume / other file fields pull the stored resume PDF.
-    if (field.kind === 'resume' || field.control === 'file') {
+    // Resume file fields pull the stored resume PDF. Unknown file fields are
+    // intentionally ignored so transcripts/portfolios do not get a resume.
+    if (field.kind === 'resume') {
       const resume = await getResume();
       if (!resume) return false;
       const file = dataUrlToFile(resume.dataUrl, resume.name, resume.type);

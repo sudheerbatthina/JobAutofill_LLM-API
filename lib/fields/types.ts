@@ -7,14 +7,18 @@ import type { Profile } from '@/lib/profile/schema';
  */
 export type FieldKind =
   | 'firstName'
+  | 'middleName'
   | 'lastName'
   | 'fullName'
   | 'email'
   | 'phone'
+  | 'phoneExtension'
   | 'address'
+  | 'addressLine2'
   | 'city'
   | 'state'
   | 'zip'
+  | 'county'
   | 'country'
   | 'linkedin'
   | 'github'
@@ -28,6 +32,8 @@ export type FieldKind =
   | 'jobTitle'
   | 'authorizedToWork'
   | 'requireSponsorship'
+  | 'previouslyEmployed'
+  | 'referralSource'
   | 'visaStatus'
   | 'gender'
   | 'race'
@@ -71,6 +77,8 @@ export interface DetectedField {
 export interface ResolvedValue {
   /** The string to type, or option text to select. */
   value: string;
+  /** Alternate option labels for select/radio/custom dropdown matching. */
+  aliases?: string[];
   /** True boolean answer for radio/checkbox yes-no fields. */
   boolValue?: boolean;
 }
