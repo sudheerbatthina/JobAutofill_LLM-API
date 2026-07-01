@@ -15,6 +15,7 @@ export const RESUME_JSON_SCHEMA: Record<string, unknown> = {
       additionalProperties: false,
       properties: {
         firstName: { type: 'string' },
+        middleName: { type: 'string' },
         lastName: { type: 'string' },
         email: { type: 'string' },
         phone: { type: 'string' },
@@ -23,7 +24,7 @@ export const RESUME_JSON_SCHEMA: Record<string, unknown> = {
         zip: { type: 'string' },
         country: { type: 'string' },
       },
-      required: ['firstName', 'lastName', 'email', 'phone', 'city', 'state', 'zip', 'country'],
+      required: ['firstName', 'middleName', 'lastName', 'email', 'phone', 'city', 'state', 'zip', 'country'],
     },
     links: {
       type: 'object',

@@ -43,16 +43,8 @@ function fillTextLike(el: HTMLElement, value: string): boolean {
 function fillSelect(el: HTMLSelectElement, resolved: ResolvedValue): boolean {
   const targets = candidateValues(resolved);
   let match: HTMLOptionElement | undefined;
-  // exact, then startsWith, then includes
-  for (const test of [
-    (option: string, target: string) => option === target,
-    (option: string, target: string) => option.startsWith(target) || target.startsWith(option),
-    (option: string, target: string) => option.includes(target) || target.includes(option),
-  ]) {
-    for (const target of targets) {
-      match = Array.from(el.options).find((o) => o.value && test(norm(o.textContent || o.value), target));
-      if (match) break;
-    }
+  for (const mode of ['exact', 'prefix', 'includes'] as const) {
+    match = Array.from(el.options).find((o) => o.value && optionMatches(o.textContent || o.value, targets, mode));
     if (match) break;
   }
   if (!match) return false;
@@ -87,10 +79,10 @@ function fillRadio(field: DetectedField, resolved: ResolvedValue): boolean {
     const t = labelFor(o);
     if (want === true) return /^y/.test(t) || t === 'true';
     if (want === false) return /^n/.test(t) || t === 'false';
-    return wantTexts.some((wantText) => t === wantText || t.includes(wantText));
+    return optionMatches(t, wantTexts, 'exact') || optionMatches(t, wantTexts, 'includes');
   });
   // Fallback: match on the raw value text.
-  if (!target) target = options.find((o) => wantTexts.some((wantText) => labelFor(o).includes(wantText)));
+  if (!target) target = options.find((o) => optionMatches(labelFor(o), wantTexts, 'includes'));
   if (!target) return false;
 
   (target as HTMLInputElement).focus();
@@ -154,8 +146,8 @@ export async function fillReactSelect(el: HTMLElement, resolved: ResolvedValue):
   const options = Array.from(
     doc.querySelectorAll('[role="option"], [class*="option"]'),
   ) as HTMLElement[];
-  let match = options.find((o) => wants.some((want) => norm(o.textContent || '') === want));
-  if (!match) match = options.find((o) => wants.some((want) => norm(o.textContent || '').includes(want)));
+  let match = options.find((o) => optionMatches(o.textContent || '', wants, 'exact'));
+  if (!match) match = options.find((o) => optionMatches(o.textContent || '', wants, 'includes'));
   if (!match) {
     opener.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
     return false;
@@ -186,8 +178,14 @@ export async function fillCustomSelect(el: HTMLElement, resolved: ResolvedValue)
     return text && style?.display !== 'none' && style?.visibility !== 'hidden';
   });
 
-  let match = options.find((option) => wants.some((want) => norm(option.textContent || option.getAttribute('data-value') || '') === want));
-  if (!match) match = options.find((option) => wants.some((want) => norm(option.textContent || option.getAttribute('data-value') || '').includes(want)));
+  let match = options.find((option) =>
+    optionMatches(option.textContent || option.getAttribute('data-value') || '', wants, 'exact'),
+  );
+  if (!match) {
+    match = options.find((option) =>
+      optionMatches(option.textContent || option.getAttribute('data-value') || '', wants, 'includes'),
+    );
+  }
   if (!match) {
     opener.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
     return false;
@@ -332,7 +330,28 @@ function norm(s: string): string {
 }
 
 function candidateValues(resolved: ResolvedValue): string[] {
-  return [resolved.value, ...(resolved.aliases ?? [])].map(norm).filter(Boolean);
+  return Array.from(
+    new Set(
+      [resolved.value, ...(resolved.aliases ?? [])]
+        .flatMap((value) => [norm(value), compactNorm(value)])
+        .filter(Boolean),
+    ),
+  );
+}
+
+function compactNorm(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function optionMatches(option: string, targets: string[], mode: 'exact' | 'prefix' | 'includes'): boolean {
+  const values = [norm(option), compactNorm(option)].filter(Boolean);
+  return values.some((value) =>
+    targets.some((target) => {
+      if (mode === 'exact') return value === target;
+      if (mode === 'prefix') return value.startsWith(target) || target.startsWith(value);
+      return value.includes(target) || target.includes(value);
+    }),
+  );
 }
 
 function dispatchBeforeInput(el: HTMLElement, value: string): void {

@@ -181,6 +181,11 @@ export function OptionsApp() {
             onChange={(v) => mut({ personal: update(profile.personal, { firstName: v }) })}
           />
           <Text
+            label="Middle name"
+            value={profile.personal.middleName}
+            onChange={(v) => mut({ personal: update(profile.personal, { middleName: v }) })}
+          />
+          <Text
             label="Last name"
             value={profile.personal.lastName}
             onChange={(v) => mut({ personal: update(profile.personal, { lastName: v }) })}

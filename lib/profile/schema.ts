@@ -12,6 +12,7 @@ import { z } from 'zod';
 
 export const PersonalSchema = z.object({
   firstName: z.string().default(''),
+  middleName: z.string().default(''),
   lastName: z.string().default(''),
   email: z.string().default(''),
   phone: z.string().default(''),

@@ -225,6 +225,30 @@ describe('value resolution', () => {
     expect(resolveValue(mk('linkedin'), profile)?.value).toBe('https://linkedin.com/in/ada');
   });
 
+  it('fills middle name only when the profile has one', () => {
+    setBody('<input />');
+    const el = document.querySelector('input')!;
+    const mk = (kind: string): DetectedField => ({ ...buildField(el), kind: kind as any });
+    const withMiddle = ProfileSchema.parse({
+      personal: { firstName: 'Ada', middleName: 'Byron', lastName: 'Lovelace' },
+    });
+    expect(resolveValue(mk('middleName'), withMiddle)?.value).toBe('Byron');
+    expect(resolveValue(mk('fullName'), withMiddle)?.value).toBe('Ada Byron Lovelace');
+  });
+
+  it('normalizes state aliases for dropdown options', () => {
+    setBody('<input />');
+    const el = document.querySelector('input')!;
+    const field: DetectedField = { ...buildField(el), kind: 'state' as any };
+    const newYorkProfile = ProfileSchema.parse({
+      personal: { state: 'Newyork' },
+    });
+    expect(resolveValue(field, newYorkProfile)).toEqual({
+      value: 'New York',
+      aliases: ['NY', 'Newyork'],
+    });
+  });
+
   it('resolves work-auth booleans', () => {
     setBody('<input />');
     const el = document.querySelector('input')!;
@@ -282,6 +306,18 @@ describe('injection', () => {
     });
     expect(ok).toBe(true);
     expect(el.value).toBe('Job Postings');
+  });
+
+  it('selects a compact state value in a native select', async () => {
+    setBody('<select id="s"><option value="">Select One</option><option value="NY">New York</option></select>');
+    const el = document.getElementById('s') as HTMLSelectElement;
+    const field = buildField(el);
+    const ok = await fillField(field, {
+      value: 'Newyork',
+      aliases: ['New York', 'NY'],
+    });
+    expect(ok).toBe(true);
+    expect(el.value).toBe('NY');
   });
 
   it('selects an option from a custom dropdown', async () => {

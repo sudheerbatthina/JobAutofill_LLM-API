@@ -10,7 +10,9 @@ function App() {
   const [msg, setMsg] = useState('');
 
   useEffect(() => {
-    getProfile().then((p) => setName([p.personal.firstName, p.personal.lastName].join(' ').trim()));
+      getProfile().then((p) =>
+        setName([p.personal.firstName, p.personal.middleName, p.personal.lastName].filter(Boolean).join(' ').trim()),
+      );
     getResume().then((r) => setHasResume(!!r));
   }, []);
 

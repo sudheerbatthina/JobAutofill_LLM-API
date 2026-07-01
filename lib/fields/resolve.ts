@@ -18,11 +18,11 @@ export function resolveValue(field: DetectedField, profile: Profile): ResolvedVa
     case 'firstName':
       return text(personal.firstName);
     case 'middleName':
-      return null;
+      return text(personal.middleName);
     case 'lastName':
       return text(personal.lastName);
     case 'fullName':
-      return text([personal.firstName, personal.lastName].filter(Boolean).join(' '));
+      return text([personal.firstName, personal.middleName, personal.lastName].filter(Boolean).join(' '));
     case 'email':
       return text(personal.email);
     case 'phone':
@@ -36,13 +36,13 @@ export function resolveValue(field: DetectedField, profile: Profile): ResolvedVa
     case 'city':
       return text(personal.city);
     case 'state':
-      return text(personal.state);
+      return withAliases(personal.state, stateAliases(personal.state));
     case 'zip':
       return text(personal.zip);
     case 'county':
       return null;
     case 'country':
-      return text(personal.country);
+      return withAliases(personal.country, countryAliases(personal.country));
     case 'linkedin':
       return text(links.linkedin);
     case 'github':
@@ -126,3 +126,84 @@ export function resolveValue(field: DetectedField, profile: Profile): ResolvedVa
       return null;
   }
 }
+
+function withAliases(value: string | undefined, aliases: string[]): ResolvedValue | null {
+  if (!value?.trim() && !aliases.length) return null;
+  return { value: aliases[0] || value || '', aliases: aliases.slice(1) };
+}
+
+function stateAliases(value: string | undefined): string[] {
+  const raw = value?.trim();
+  if (!raw) return [];
+  const compact = raw.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const match = US_STATES.find(
+    (state) =>
+      state.code.toLowerCase() === compact ||
+      state.name.toLowerCase().replace(/[^a-z0-9]/g, '') === compact,
+  );
+  if (!match) return [raw];
+  return Array.from(new Set([match.name, match.code, raw]));
+}
+
+function countryAliases(value: string | undefined): string[] {
+  const raw = value?.trim();
+  if (!raw) return [];
+  const compact = raw.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (['us', 'usa', 'unitedstates', 'unitedstatesofamerica'].includes(compact)) {
+    return ['United States of America', 'United States', 'USA', 'US', raw];
+  }
+  return [raw];
+}
+
+const US_STATES = [
+  ['AL', 'Alabama'],
+  ['AK', 'Alaska'],
+  ['AZ', 'Arizona'],
+  ['AR', 'Arkansas'],
+  ['CA', 'California'],
+  ['CO', 'Colorado'],
+  ['CT', 'Connecticut'],
+  ['DE', 'Delaware'],
+  ['FL', 'Florida'],
+  ['GA', 'Georgia'],
+  ['HI', 'Hawaii'],
+  ['ID', 'Idaho'],
+  ['IL', 'Illinois'],
+  ['IN', 'Indiana'],
+  ['IA', 'Iowa'],
+  ['KS', 'Kansas'],
+  ['KY', 'Kentucky'],
+  ['LA', 'Louisiana'],
+  ['ME', 'Maine'],
+  ['MD', 'Maryland'],
+  ['MA', 'Massachusetts'],
+  ['MI', 'Michigan'],
+  ['MN', 'Minnesota'],
+  ['MS', 'Mississippi'],
+  ['MO', 'Missouri'],
+  ['MT', 'Montana'],
+  ['NE', 'Nebraska'],
+  ['NV', 'Nevada'],
+  ['NH', 'New Hampshire'],
+  ['NJ', 'New Jersey'],
+  ['NM', 'New Mexico'],
+  ['NY', 'New York'],
+  ['NC', 'North Carolina'],
+  ['ND', 'North Dakota'],
+  ['OH', 'Ohio'],
+  ['OK', 'Oklahoma'],
+  ['OR', 'Oregon'],
+  ['PA', 'Pennsylvania'],
+  ['RI', 'Rhode Island'],
+  ['SC', 'South Carolina'],
+  ['SD', 'South Dakota'],
+  ['TN', 'Tennessee'],
+  ['TX', 'Texas'],
+  ['UT', 'Utah'],
+  ['VT', 'Vermont'],
+  ['VA', 'Virginia'],
+  ['WA', 'Washington'],
+  ['WV', 'West Virginia'],
+  ['WI', 'Wisconsin'],
+  ['WY', 'Wyoming'],
+].map(([code, name]) => ({ code, name }));

@@ -10,7 +10,7 @@ export function buildEssayPrompt(
 ): { system: string; user: string } {
   const p = profile.personal;
   const profileSummary = [
-    `Name: ${p.firstName} ${p.lastName}`.trim(),
+    `Name: ${[p.firstName, p.middleName, p.lastName].filter(Boolean).join(' ')}`.trim(),
     profile.summary && `Summary: ${profile.summary}`,
     profile.skills.length && `Skills: ${profile.skills.join(', ')}`,
     profile.experience.length &&
