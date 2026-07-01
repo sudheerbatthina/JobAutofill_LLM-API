@@ -30,6 +30,12 @@ export type FieldKind =
   | 'gpa'
   | 'company'
   | 'jobTitle'
+  | 'experienceLocation'
+  | 'experienceStartDate'
+  | 'experienceEndDate'
+  | 'experienceDescription'
+  | 'educationStartDate'
+  | 'educationEndDate'
   | 'authorizedToWork'
   | 'requireSponsorship'
   | 'previouslyEmployed'
@@ -53,7 +59,8 @@ export type ControlType =
   | 'radio' // group of radio inputs
   | 'checkbox'
   | 'file'
-  | 'react-select'; // custom combobox (Greenhouse etc.)
+  | 'react-select' // custom combobox (Greenhouse etc.)
+  | 'custom-select'; // button/div driven listbox dropdowns
 
 /** A single fillable field discovered on the page. */
 export interface DetectedField {

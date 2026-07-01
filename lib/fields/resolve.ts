@@ -63,6 +63,18 @@ export function resolveValue(field: DetectedField, profile: Profile): ResolvedVa
       return text(exp?.company);
     case 'jobTitle':
       return text(exp?.title);
+    case 'experienceLocation':
+      return text(exp?.location);
+    case 'experienceStartDate':
+      return text(exp?.startDate);
+    case 'experienceEndDate':
+      return text(exp?.current ? 'Present' : exp?.endDate);
+    case 'experienceDescription':
+      return text(exp?.description);
+    case 'educationStartDate':
+      return text(edu?.startDate);
+    case 'educationEndDate':
+      return text(edu?.endDate);
     case 'visaStatus':
       return text(workAuth.visaStatus);
     case 'gender':

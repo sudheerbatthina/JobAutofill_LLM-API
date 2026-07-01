@@ -35,21 +35,27 @@ export function extractLabel(el: HTMLElement): string {
   const ancestorLabel = el.closest('label');
   if (ancestorLabel?.textContent?.trim()) return clean(ancestorLabel.textContent);
 
+  const fileContext = fileContextLabel(el);
+  if (fileContext) return clean(fileContext);
+
   // 5. preceding sibling label-ish element within the same field container
   const container = el.closest('div, fieldset, section, li, p');
   if (container) {
     const prev = nearestPreviousLabel(el, container);
     if (prev) return clean(prev);
 
-    // Only trust a container-level label when that container owns one control.
-    // Large grouped sections often contain Address Line 1, City, Zip, etc.; using
-    // the first label there causes every field in the section to become address.
+    // Trust a container-level label when it is unambiguous. Some ATS rows have a
+    // prefix dropdown plus the actual input under one label, so "one control" is
+    // too strict; "one label" is the better guard against grouped address blocks.
     const controls = Array.from(
       container.querySelectorAll<HTMLElement>(
-        'input, select, textarea, [contenteditable="true"], [role="combobox"]',
+        'input, select, textarea, [contenteditable="true"], [role="combobox"], [aria-haspopup="listbox"], [aria-haspopup="true"]',
       ),
     ).filter((candidate) => candidate === el || isFillable(candidate));
-    const lbl = controls.length <= 1 ? container.querySelector('label, .label, legend') : null;
+    const labels = Array.from(container.querySelectorAll('label, .label, legend')).filter(
+      (label) => label.textContent?.trim(),
+    );
+    const lbl = controls.length <= 1 || labels.length === 1 ? labels[0] : null;
     if (lbl?.textContent?.trim()) return clean(lbl.textContent);
   }
 
@@ -79,11 +85,25 @@ function nearestPreviousLabel(el: HTMLElement, boundary: Element): string {
       const text = node.textContent?.trim() ?? '';
       if (text) return text;
     }
-    if (node.querySelector('input, select, textarea, [contenteditable="true"], [role="combobox"]')) {
+    const nestedLabel = node.querySelector('label, .label, legend');
+    if (nestedLabel?.textContent?.trim()) return nestedLabel.textContent;
+    const text = node.textContent?.trim() ?? '';
+    if (text && text.length <= 80 && !node.querySelector('input, select, textarea, [contenteditable="true"], [role="combobox"]')) {
+      return text;
+    }
+    if (node.querySelector('input, select, textarea, [contenteditable="true"], [role="combobox"], [aria-haspopup="listbox"], [aria-haspopup="true"]')) {
       break;
     }
     node = node.previousElementSibling;
   }
+  return '';
+}
+
+function fileContextLabel(el: HTMLElement): string {
+  if (!(el instanceof HTMLInputElement) || el.type !== 'file') return '';
+  const context = el.closest('label, .field, .form-group, section, div');
+  const text = context?.textContent?.trim() ?? '';
+  if (/\b(resume|cv|cover letter|upload|attachment)\b/i.test(text)) return text;
   return '';
 }
 
@@ -134,8 +154,14 @@ const RULES: Rule[] = [
   { kind: 'degree', any: [/degree/, /qualification/] },
   { kind: 'fieldOfStudy', any: [/field of study/, /major/, /discipline/, /concentration/] },
   { kind: 'gpa', any: [/\bgpa\b/, /grade point/] },
+  { kind: 'educationStartDate', any: [/education.*start/, /school.*start/, /start date/], not: [/work/, /job/, /employ/, /company/] },
+  { kind: 'educationEndDate', any: [/education.*end/, /school.*end/, /graduat/, /end date/], not: [/work/, /job/, /employ/, /company/] },
   { kind: 'company', any: [/current company/, /current employer/, /\bemployer\b/, /\bcompany\b/] },
   { kind: 'jobTitle', any: [/current title/, /job title/, /\btitle\b/, /position/, /\brole\b/] },
+  { kind: 'experienceLocation', any: [/work.*location/, /job.*location/, /company.*location/, /employment.*location/, /\blocation\b/] },
+  { kind: 'experienceStartDate', any: [/work.*start/, /job.*start/, /employment.*start/, /start date/] },
+  { kind: 'experienceEndDate', any: [/work.*end/, /job.*end/, /employment.*end/, /end date/] },
+  { kind: 'experienceDescription', any: [/description/, /responsibilit/, /duties/, /summary of work/] },
   {
     kind: 'authorizedToWork',
     any: [/authoriz/, /legally (allowed|able) to work/, /eligible to work/, /right to work/],
@@ -175,6 +201,9 @@ export function classify(el: HTMLElement, label: string): { kind: FieldKind; con
       // Workday and many ATS pages put the field identity here.
       el.getAttribute('data-automation-id') ?? '',
       el.getAttribute('data-test-id') ?? '',
+      el.getAttribute('aria-haspopup') ?? '',
+      sectionContext(el),
+      el.textContent ?? '',
     ].join(' '),
   );
 
@@ -229,24 +258,39 @@ export function controlTypeOf(el: HTMLElement): ControlType {
     if (inReactSelect(el)) return 'react-select';
     return 'text';
   }
+  if (isCustomSelect(el)) return 'custom-select';
   // ARIA combobox div (custom dropdowns).
   if (el.getAttribute('role') === 'combobox') return 'react-select';
   return 'text';
 }
 
+function isCustomSelect(el: HTMLElement): boolean {
+  const role = el.getAttribute('role');
+  const popup = el.getAttribute('aria-haspopup');
+  return role === 'button' || role === 'listbox' || popup === 'listbox' || popup === 'true';
+}
+
+function sectionContext(el: HTMLElement): string {
+  const section = el.closest('fieldset, section, .section, .form-section, div');
+  const heading = section?.querySelector('legend, h1, h2, h3, h4, [class*="title"], [class*="heading"]');
+  return heading?.textContent?.trim() ?? '';
+}
+
 /** Is this element something we should consider filling? */
 export function isFillable(el: HTMLElement): boolean {
   if (!(el instanceof HTMLElement)) return false;
-  const style = el.ownerDocument.defaultView?.getComputedStyle(el);
-  if (style && (style.display === 'none' || style.visibility === 'hidden')) return false;
   if (el.hasAttribute('disabled') || el.getAttribute('aria-hidden') === 'true') return false;
   const tag = el.tagName.toLowerCase();
+  if (tag === 'input' && (el as HTMLInputElement).type === 'file') return true;
+  const style = el.ownerDocument.defaultView?.getComputedStyle(el);
+  if (style && (style.display === 'none' || style.visibility === 'hidden')) return false;
   if (tag === 'select' || tag === 'textarea') return true;
   if (el.isContentEditable) return true;
   if (tag === 'input') {
     const t = (el as HTMLInputElement).type;
     return !['hidden', 'submit', 'button', 'reset', 'image', 'search'].includes(t);
   }
+  if (isCustomSelect(el)) return true;
   return false;
 }
 

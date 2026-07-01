@@ -7,6 +7,7 @@ import type { AtsAdapter, DetectedField } from '@/lib/fields/types';
 import type { Profile } from '@/lib/profile/schema';
 import { dataUrlToFile } from '@/lib/util/file';
 import { hasApplicationContext } from './applicationGate';
+import { expandRepeatableSections } from './repeatableSections';
 
 /**
  * Orchestrates detection + the per-field UI on a single page. One instance per
@@ -105,6 +106,11 @@ export class Controller {
 
   /** Fill every field we have a value for. Returns count filled. */
   async fillAll(): Promise<number> {
+    if (this.profile) {
+      const expanded = await expandRepeatableSections(this.doc);
+      if (expanded) this.refresh();
+    }
+
     let count = 0;
     for (const field of this.fields) {
       const ok = await this.fillOne(field);

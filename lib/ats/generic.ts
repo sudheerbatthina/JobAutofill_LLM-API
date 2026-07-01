@@ -20,7 +20,7 @@ export const genericAdapter: AtsAdapter = {
 
     const candidates = Array.from(
       doc.querySelectorAll<HTMLElement>(
-        'input, select, textarea, [contenteditable="true"], [role="combobox"]',
+        'input, select, textarea, [contenteditable="true"], [role="combobox"], [aria-haspopup="listbox"], [aria-haspopup="true"], [role="button"]',
       ),
     );
 

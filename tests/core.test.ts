@@ -6,6 +6,7 @@ import { fillField } from '@/lib/fields/inject';
 import { ProfileSchema, type Profile } from '@/lib/profile/schema';
 import type { DetectedField } from '@/lib/fields/types';
 import { hasApplicationContext } from '@/lib/content/applicationGate';
+import { expandRepeatableSections } from '@/lib/content/repeatableSections';
 
 const profile: Profile = ProfileSchema.parse({
   personal: {
@@ -19,7 +20,17 @@ const profile: Profile = ProfileSchema.parse({
   },
   links: { linkedin: 'https://linkedin.com/in/ada' },
   education: [{ school: 'MIT', degree: 'BS', field: 'CS', gpa: '3.9' }],
-  experience: [{ company: 'Analytical Engines', title: 'Engineer' }],
+  experience: [
+    {
+      company: 'Analytical Engines',
+      title: 'Engineer',
+      location: 'Buffalo, NY',
+      startDate: 'Jan 2024',
+      endDate: 'Present',
+      current: true,
+      description: 'Built reliable automation.',
+    },
+  ],
   workAuth: { authorizedToWorkUS: true, requireSponsorship: false },
   skills: ['Python'],
 });
@@ -65,6 +76,10 @@ describe('classification', () => {
     ['LinkedIn Profile', 'linkedin'],
     ['GitHub', 'github'],
     ['School', 'school'],
+    ['Work Location', 'experienceLocation'],
+    ['Employment Start Date', 'experienceStartDate'],
+    ['Employment End Date', 'experienceEndDate'],
+    ['Responsibilities', 'experienceDescription'],
     ['Are you authorized to work in the US?', 'authorizedToWork'],
     ['Will you now or in the future require sponsorship?', 'requireSponsorship'],
     ['Have you been employed by Acme previously?', 'previouslyEmployed'],
@@ -177,6 +192,20 @@ describe('generic adapter detection (Greenhouse-like form)', () => {
     expect(byId.zip).toBe('zip');
     expect(byId.county).toBe('county');
   });
+
+  it('detects hidden resume file inputs inside upload drop zones', () => {
+    setBody(`
+      <section>
+        <h2>Resume/CV</h2>
+        <div>Drop files here or Select files</div>
+        <input id="resume-file" type="file" style="display:none" />
+      </section>
+    `);
+    const fields = genericAdapter.detect(document);
+    const resume = fields.find((field) => field.element.id === 'resume-file');
+    expect(resume?.kind).toBe('resume');
+    expect(resume?.control).toBe('file');
+  });
 });
 
 describe('value resolution', () => {
@@ -189,6 +218,10 @@ describe('value resolution', () => {
     expect(resolveValue(mk('middleName'), profile)).toBeNull();
     expect(resolveValue(mk('school'), profile)?.value).toBe('MIT');
     expect(resolveValue(mk('jobTitle'), profile)?.value).toBe('Engineer');
+    expect(resolveValue(mk('experienceLocation'), profile)?.value).toBe('Buffalo, NY');
+    expect(resolveValue(mk('experienceStartDate'), profile)?.value).toBe('Jan 2024');
+    expect(resolveValue(mk('experienceEndDate'), profile)?.value).toBe('Present');
+    expect(resolveValue(mk('experienceDescription'), profile)?.value).toBe('Built reliable automation.');
     expect(resolveValue(mk('linkedin'), profile)?.value).toBe('https://linkedin.com/in/ada');
   });
 
@@ -251,6 +284,26 @@ describe('injection', () => {
     expect(el.value).toBe('Job Postings');
   });
 
+  it('selects an option from a custom dropdown', async () => {
+    setBody(`
+      <label id="auth-label">Work Authorization</label>
+      <button id="auth" aria-haspopup="listbox" aria-labelledby="auth-label">-None-</button>
+      <div role="listbox">
+        <div role="option" id="yes">Yes</div>
+        <div role="option" id="no">No</div>
+      </div>
+    `);
+    let clicked = '';
+    document.getElementById('yes')!.addEventListener('click', () => {
+      clicked = 'Yes';
+    });
+    const field = buildField(document.getElementById('auth')!);
+    expect(field.control).toBe('custom-select');
+    const ok = await fillField(field, { value: 'Yes', boolValue: true });
+    expect(ok).toBe(true);
+    expect(clicked).toBe('Yes');
+  });
+
   it('selects the correct radio for a yes/no answer', async () => {
     setBody(`
       <fieldset>
@@ -263,5 +316,27 @@ describe('injection', () => {
     await fillField(field, { value: 'No', boolValue: false });
     const checked = document.querySelector('input[name="a"]:checked') as HTMLInputElement;
     expect(checked.value).toBe('no');
+  });
+});
+
+describe('repeatable sections', () => {
+  beforeEach(() => setBody(''));
+
+  it('clicks unopened work experience add buttons', async () => {
+    setBody(`
+      <section>
+        <h2>Work Experience</h2>
+        <button id="add">Add</button>
+      </section>
+    `);
+    document.getElementById('add')!.addEventListener('click', () => {
+      document.querySelector('section')!.insertAdjacentHTML(
+        'beforeend',
+        '<label>Company</label><input id="company" />',
+      );
+    });
+    const clicked = await expandRepeatableSections(document);
+    expect(clicked).toBe(1);
+    expect(document.getElementById('company')).toBeTruthy();
   });
 });
