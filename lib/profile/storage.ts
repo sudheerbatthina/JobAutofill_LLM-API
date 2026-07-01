@@ -24,6 +24,11 @@ const resumeItem = storage.defineItem<ResumeFile | null>('local:resume', {
   fallback: null,
 });
 
+/** Optional cover letter PDF for file-upload fields. Same shape as ResumeFile. */
+const coverLetterFileItem = storage.defineItem<ResumeFile | null>('local:coverLetterFile', {
+  fallback: null,
+});
+
 /** Extension settings, incl. the bring-your-own Anthropic API key. */
 export interface Settings {
   anthropicApiKey: string;
@@ -61,6 +66,14 @@ export async function getResume(): Promise<ResumeFile | null> {
 
 export async function setResume(file: ResumeFile | null): Promise<void> {
   await resumeItem.setValue(file);
+}
+
+export async function getCoverLetterFile(): Promise<ResumeFile | null> {
+  return coverLetterFileItem.getValue();
+}
+
+export async function setCoverLetterFile(file: ResumeFile | null): Promise<void> {
+  await coverLetterFileItem.setValue(file);
 }
 
 export async function getSettings(): Promise<Settings> {

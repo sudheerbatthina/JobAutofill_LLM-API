@@ -87,9 +87,13 @@ export function resolveValue(field: DetectedField, profile: Profile): ResolvedVa
       };
     }
 
-    // resume/coverLetter handled separately (file injection); unknown -> no value
-    case 'resume':
     case 'coverLetter':
+      // Text/textarea cover letter fields → fill from stored text.
+      // File-upload cover letter fields are handled separately in the controller.
+      return text(profile.coverLetter);
+
+    // resume file injection is handled in the controller, not here.
+    case 'resume':
     case 'unknown':
     default:
       return null;

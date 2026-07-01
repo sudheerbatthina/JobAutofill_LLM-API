@@ -4,9 +4,9 @@ import { defineConfig } from 'wxt';
 export default defineConfig({
   modules: ['@wxt-dev/module-react'],
   manifest: {
-    name: 'Autofill — Personal Job Application Filler',
+    name: 'Free Job Autofiller',
     description:
-      'Reads job application forms and fills them from your saved profile. Per-field, review-before-submit. Optional Claude assist for essay questions.',
+      'Automatically fills job applications on Greenhouse, Lever, Workday and any company career page — from your saved profile. Per-field fill, cover letter, EEO answers, resume upload. Optional Claude AI for essay questions. Free, private, no data leaves your browser.',
     permissions: ['storage'],
     host_permissions: [
       '*://*.greenhouse.io/*',

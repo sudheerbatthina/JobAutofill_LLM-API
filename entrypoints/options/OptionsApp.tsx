@@ -6,6 +6,8 @@ import {
   setSettings as saveSettings,
   getResume,
   setResume,
+  getCoverLetterFile,
+  setCoverLetterFile,
   type Settings,
   type ResumeFile,
 } from '@/lib/profile/storage';
@@ -48,15 +50,20 @@ export function OptionsApp() {
   const [settings, setSettings] = React.useState<Settings | null>(null);
   const [resume, setResumeState] = React.useState<ResumeFile | null>(null);
   const [pendingResume, setPendingResume] = React.useState<File | null>(null);
+  const [coverLetterFile, setCoverLetterFileState] = React.useState<ResumeFile | null>(null);
+  const [pendingCoverLetter, setPendingCoverLetter] = React.useState<File | null>(null);
   const [status, setStatus] = React.useState('');
   const [dirty, setDirty] = React.useState(false);
 
   React.useEffect(() => {
-    Promise.all([getProfile(), getSettings(), getResume()]).then(([p, s, r]) => {
-      setProfile(p);
-      setSettings(s);
-      setResumeState(r);
-    });
+    Promise.all([getProfile(), getSettings(), getResume(), getCoverLetterFile()]).then(
+      ([p, s, r, cl]) => {
+        setProfile(p);
+        setSettings(s);
+        setResumeState(r);
+        setCoverLetterFileState(cl);
+      },
+    );
   }, []);
 
   if (!profile || !settings) {
@@ -97,6 +104,20 @@ export function OptionsApp() {
     await setResume(record);
     setResumeState(record);
     setStatus(`Resume "${file.name}" saved ✓`);
+    setTimeout(() => setStatus(''), 2500);
+  };
+
+  const onCoverLetterFileUpload = async (file: File) => {
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+    const record: ResumeFile = { name: file.name, type: file.type, dataUrl, size: file.size, addedAt: Date.now() };
+    await setCoverLetterFile(record);
+    setCoverLetterFileState(record);
+    setStatus(`Cover letter "${file.name}" saved ✓`);
     setTimeout(() => setStatus(''), 2500);
   };
 
@@ -420,6 +441,49 @@ export function OptionsApp() {
           The PDF is stored locally and injected into application file-upload fields. "Parse with
           Claude" reads it in your browser and fills your profile (needs an API key below).
         </p>
+      </section>
+
+      {/* Cover Letter */}
+      <section className="card">
+        <h2>✉️ Cover Letter</h2>
+        <Area
+          label="Cover letter text (filled into textarea cover-letter fields)"
+          rows={8}
+          placeholder="Dear Hiring Manager, …"
+          value={profile.coverLetter}
+          onChange={(v) => mut({ coverLetter: v })}
+        />
+        <p className="hint">
+          On forms with a cover-letter textarea this text is filled directly. On forms with a
+          file-upload field, upload a PDF below. The ✨ button on any cover-letter field can also
+          draft one with Claude.
+        </p>
+        <div style={{ marginTop: 8 }}>
+          <label style={{ fontWeight: 600, display: 'block', marginBottom: 4 }}>
+            Cover letter PDF (for file-upload fields)
+          </label>
+          {coverLetterFile ? (
+            <p className="sub">
+              Current: <code>{coverLetterFile.name}</code> ({Math.round(coverLetterFile.size / 1024)} KB)
+            </p>
+          ) : (
+            <p className="sub">No cover letter PDF uploaded yet.</p>
+          )}
+          <input
+            type="file"
+            accept="application/pdf"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) {
+                onCoverLetterFileUpload(f);
+                setPendingCoverLetter(f);
+              }
+            }}
+          />
+          {pendingCoverLetter && (
+            <p className="hint" style={{ marginTop: 4 }}>"{pendingCoverLetter.name}" saved ✓</p>
+          )}
+        </div>
       </section>
 
       {/* Settings */}

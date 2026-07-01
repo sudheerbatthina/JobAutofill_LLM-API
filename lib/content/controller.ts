@@ -2,7 +2,7 @@ import { pickAdapter } from '@/lib/ats/registry';
 import { resolveValue } from '@/lib/fields/resolve';
 import { injectFile, fillField } from '@/lib/fields/inject';
 import { OverlayManager, type FieldAction } from '@/lib/ui/overlay';
-import { getProfile, getResume, watchProfile } from '@/lib/profile/storage';
+import { getProfile, getResume, getCoverLetterFile, watchProfile } from '@/lib/profile/storage';
 import type { AtsAdapter, DetectedField } from '@/lib/fields/types';
 import type { Profile } from '@/lib/profile/schema';
 import { dataUrlToFile } from '@/lib/util/file';
@@ -67,8 +67,18 @@ export class Controller {
   }
 
   private async fillOne(field: DetectedField): Promise<boolean> {
-    // Resume / file fields pull the stored PDF.
-    if (field.kind === 'resume' || (field.control === 'file' && field.kind !== 'coverLetter')) {
+    // Cover letter file upload → inject stored cover letter PDF.
+    if (field.kind === 'coverLetter' && field.control === 'file') {
+      const clf = await getCoverLetterFile();
+      if (!clf) return false;
+      const file = dataUrlToFile(clf.dataUrl, clf.name, clf.type);
+      const ok = injectFile(field.element as HTMLInputElement, file);
+      if (ok) this.overlay.flash(field);
+      return ok;
+    }
+
+    // Resume / other file fields pull the stored resume PDF.
+    if (field.kind === 'resume' || field.control === 'file') {
       const resume = await getResume();
       if (!resume) return false;
       const file = dataUrlToFile(resume.dataUrl, resume.name, resume.type);
