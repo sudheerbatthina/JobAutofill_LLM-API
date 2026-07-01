@@ -1,0 +1,56 @@
+.popup {
+  width: 280px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.popup h1 {
+  font-size: 18px;
+  margin: 0 0 4px;
+}
+
+.popup .who {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted, #99a1b3);
+}
+
+.popup button {
+  width: 100%;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 6px;
+}
+
+.popup button.primary {
+  background: #2f6fed;
+  color: white;
+}
+
+.popup button.primary:hover {
+  background: #6ea8fe;
+}
+
+.popup button.secondary {
+  background: transparent;
+  border: 1px solid #2a2f3a;
+  color: inherit;
+}
+
+.popup .msg {
+  font-size: 13px;
+  margin: 6px 0 0;
+}
+
+.popup .hint {
+  font-size: 11px;
+  color: var(--muted, #99a1b3);
+  margin: 8px 0 0;
+  line-height: 1.4;
+}

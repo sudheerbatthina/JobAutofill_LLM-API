@@ -1,0 +1,195 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import { genericAdapter } from '@/lib/ats/generic';
+import { classify, extractLabel, buildField } from '@/lib/fields/detect';
+import { resolveValue } from '@/lib/fields/resolve';
+import { fillField } from '@/lib/fields/inject';
+import { ProfileSchema, type Profile } from '@/lib/profile/schema';
+import type { DetectedField } from '@/lib/fields/types';
+
+const profile: Profile = ProfileSchema.parse({
+  personal: {
+    firstName: 'Ada',
+    lastName: 'Lovelace',
+    email: 'ada@example.com',
+    phone: '555-1234',
+    city: 'Boston',
+    state: 'MA',
+    zip: '02118',
+  },
+  links: { linkedin: 'https://linkedin.com/in/ada' },
+  education: [{ school: 'MIT', degree: 'BS', field: 'CS', gpa: '3.9' }],
+  experience: [{ company: 'Analytical Engines', title: 'Engineer' }],
+  workAuth: { authorizedToWorkUS: true, requireSponsorship: false },
+  skills: ['Python'],
+});
+
+function setBody(html: string) {
+  document.body.innerHTML = html;
+}
+
+function fieldByKind(fields: DetectedField[], kind: string) {
+  return fields.find((f) => f.kind === kind);
+}
+
+describe('label extraction', () => {
+  beforeEach(() => setBody(''));
+
+  it('reads label[for]', () => {
+    setBody('<label for="e">Email Address</label><input id="e" />');
+    const el = document.getElementById('e')!;
+    expect(extractLabel(el)).toBe('Email Address');
+  });
+
+  it('reads aria-label', () => {
+    setBody('<input aria-label="Phone Number" />');
+    expect(extractLabel(document.querySelector('input')!)).toBe('Phone Number');
+  });
+
+  it('falls back to placeholder then name', () => {
+    setBody('<input placeholder="Your LinkedIn" />');
+    expect(extractLabel(document.querySelector('input')!)).toBe('Your LinkedIn');
+  });
+});
+
+describe('classification', () => {
+  beforeEach(() => setBody(''));
+
+  const cases: [string, string][] = [
+    ['First Name', 'firstName'],
+    ['Last Name', 'lastName'],
+    ['Email', 'email'],
+    ['Phone', 'phone'],
+    ['LinkedIn Profile', 'linkedin'],
+    ['GitHub', 'github'],
+    ['School', 'school'],
+    ['Are you authorized to work in the US?', 'authorizedToWork'],
+    ['Will you now or in the future require sponsorship?', 'requireSponsorship'],
+    ['Gender', 'gender'],
+  ];
+
+  for (const [label, kind] of cases) {
+    it(`classifies "${label}" -> ${kind}`, () => {
+      setBody('<input />');
+      const el = document.querySelector('input')!;
+      expect(classify(el, label).kind).toBe(kind);
+    });
+  }
+
+  it('uses autocomplete tokens with high confidence', () => {
+    setBody('<input autocomplete="family-name" />');
+    const el = document.querySelector('input')!;
+    const res = classify(el, '');
+    expect(res.kind).toBe('lastName');
+    expect(res.confidence).toBeGreaterThan(0.9);
+  });
+});
+
+describe('generic adapter detection (Greenhouse-like form)', () => {
+  beforeEach(() =>
+    setBody(`
+    <form>
+      <label for="first_name">First Name *</label><input id="first_name" required />
+      <label for="last_name">Last Name *</label><input id="last_name" required />
+      <label for="email">Email *</label><input id="email" type="email" required />
+      <label for="phone">Phone</label><input id="phone" type="tel" />
+      <label for="ln">LinkedIn Profile</label><input id="ln" type="url" />
+      <label for="resume">Resume/CV</label><input id="resume" type="file" />
+      <label for="cl">Why do you want to work here?</label><textarea id="cl"></textarea>
+      <fieldset>
+        <legend>Are you authorized to work in the US?</legend>
+        <label><input type="radio" name="auth" value="yes" /> Yes</label>
+        <label><input type="radio" name="auth" value="no" /> No</label>
+      </fieldset>
+    </form>
+  `),
+  );
+
+  it('detects the expected field kinds', () => {
+    const fields = genericAdapter.detect(document);
+    const kinds = fields.map((f) => f.kind);
+    expect(kinds).toContain('firstName');
+    expect(kinds).toContain('lastName');
+    expect(kinds).toContain('email');
+    expect(kinds).toContain('phone');
+    expect(kinds).toContain('linkedin');
+    expect(kinds).toContain('resume');
+    expect(kinds).toContain('authorizedToWork');
+  });
+
+  it('groups the radio question into a single field', () => {
+    const fields = genericAdapter.detect(document);
+    const auth = fieldByKind(fields, 'authorizedToWork')!;
+    expect(auth.control).toBe('radio');
+    expect(auth.groupElements?.length).toBe(2);
+  });
+
+  it('marks required fields', () => {
+    const fields = genericAdapter.detect(document);
+    expect(fieldByKind(fields, 'email')!.required).toBe(true);
+  });
+});
+
+describe('value resolution', () => {
+  it('resolves personal + nested fields', () => {
+    setBody('<input />');
+    const el = document.querySelector('input')!;
+    const mk = (kind: string): DetectedField => ({ ...buildField(el), kind: kind as any });
+    expect(resolveValue(mk('email'), profile)?.value).toBe('ada@example.com');
+    expect(resolveValue(mk('fullName'), profile)?.value).toBe('Ada Lovelace');
+    expect(resolveValue(mk('school'), profile)?.value).toBe('MIT');
+    expect(resolveValue(mk('jobTitle'), profile)?.value).toBe('Engineer');
+    expect(resolveValue(mk('linkedin'), profile)?.value).toBe('https://linkedin.com/in/ada');
+  });
+
+  it('resolves work-auth booleans', () => {
+    setBody('<input />');
+    const el = document.querySelector('input')!;
+    const mk = (kind: string): DetectedField => ({ ...buildField(el), kind: kind as any });
+    expect(resolveValue(mk('authorizedToWork'), profile)).toEqual({ value: 'Yes', boolValue: true });
+    expect(resolveValue(mk('requireSponsorship'), profile)).toEqual({ value: 'No', boolValue: false });
+  });
+
+  it('returns null for unknown / missing data', () => {
+    setBody('<input />');
+    const el = document.querySelector('input')!;
+    const mk = (kind: string): DetectedField => ({ ...buildField(el), kind: kind as any });
+    expect(resolveValue(mk('unknown'), profile)).toBeNull();
+    expect(resolveValue(mk('portfolio'), profile)).toBeNull();
+  });
+});
+
+describe('injection', () => {
+  it('fills text inputs and dispatches events', async () => {
+    setBody('<input id="x" />');
+    const el = document.getElementById('x') as HTMLInputElement;
+    let inputFired = false;
+    el.addEventListener('input', () => (inputFired = true));
+    const field = buildField(el);
+    await fillField({ ...field, kind: 'email' as any }, { value: 'ada@example.com' });
+    expect(el.value).toBe('ada@example.com');
+    expect(inputFired).toBe(true);
+  });
+
+  it('selects the matching option in a native select', async () => {
+    setBody('<select id="s"><option value="">--</option><option>Yes</option><option>No</option></select>');
+    const el = document.getElementById('s') as HTMLSelectElement;
+    const field = buildField(el);
+    const ok = await fillField(field, { value: 'Yes' });
+    expect(ok).toBe(true);
+    expect(el.value).toBe('Yes');
+  });
+
+  it('selects the correct radio for a yes/no answer', async () => {
+    setBody(`
+      <fieldset>
+        <legend>Authorized?</legend>
+        <label><input type="radio" name="a" value="yes" /> Yes</label>
+        <label><input type="radio" name="a" value="no" /> No</label>
+      </fieldset>`);
+    const fields = genericAdapter.detect(document);
+    const field = fields.find((f) => f.control === 'radio')!;
+    await fillField(field, { value: 'No', boolValue: false });
+    const checked = document.querySelector('input[name="a"]:checked') as HTMLInputElement;
+    expect(checked.value).toBe('no');
+  });
+});
