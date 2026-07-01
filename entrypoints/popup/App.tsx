@@ -58,7 +58,19 @@ function App() {
     const next = { ...settings, autofillEnabled: !settings.autofillEnabled };
     setPopupSettings(next);
     await setSettings(next);
+    await notifyActiveTab(next.autofillEnabled);
     setMsg(next.autofillEnabled ? 'Autofill turned on.' : 'Autofill turned off.');
+  };
+
+  const notifyActiveTab = async (enabled: boolean) => {
+    try {
+      const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id) {
+        await browser.tabs.sendMessage(tab.id, { type: 'AUTOFILL_SET_ENABLED', enabled });
+      }
+    } catch {
+      // Pages without the content script will pick up the persisted setting later.
+    }
   };
 
   const enabled = settings?.autofillEnabled ?? true;

@@ -60,6 +60,11 @@ export class Controller {
     this.overlay.sync(this.fields.map((f) => this.toAction(f)));
   };
 
+  setEnabled(enabled: boolean): void {
+    this.enabled = enabled;
+    this.refresh();
+  }
+
   private looksLikeApplication(): boolean {
     if (this.adapter.name !== 'generic') return true;
     const known = this.fields.filter((f) => f.kind !== 'unknown');

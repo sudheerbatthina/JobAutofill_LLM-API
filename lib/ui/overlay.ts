@@ -49,6 +49,7 @@ export class OverlayManager {
   private rafPending = false;
 
   constructor(private doc: Document) {
+    doc.getElementById('__autofill_overlay_host')?.remove();
     this.host = doc.createElement('div');
     this.host.id = '__autofill_overlay_host';
     this.host.style.cssText = 'position:absolute;top:0;left:0;width:0;height:0;';

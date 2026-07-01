@@ -13,7 +13,12 @@ export default defineContentScript({
     const controller = new Controller(document);
     await controller.start();
 
-    browser.runtime.onMessage.addListener((msg: { type?: string }, _sender, sendResponse) => {
+    browser.runtime.onMessage.addListener((msg: { type?: string; enabled?: boolean }, _sender, sendResponse) => {
+      if (msg?.type === 'AUTOFILL_SET_ENABLED') {
+        controller.setEnabled(msg.enabled !== false);
+        sendResponse({ ok: true });
+        return false;
+      }
       if (msg?.type === 'FILL_ALL') {
         controller.fillAll().then((filled) => sendResponse({ filled }));
         return true; // async response
