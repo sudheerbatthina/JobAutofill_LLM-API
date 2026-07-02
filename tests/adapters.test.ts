@@ -29,6 +29,31 @@ describe('adapter selection', () => {
     const a = pickAdapter(new URL('https://www.acme.com/careers/apply'), document);
     expect(a.name).toBe('greenhouse');
   });
+
+  it('picks ashby by hostname', () => {
+    const a = pickAdapter(new URL('https://jobs.ashbyhq.com/acme/abc'), document);
+    expect(a.name).toBe('ashby');
+  });
+
+  it('picks workable by hostname', () => {
+    const a = pickAdapter(new URL('https://apply.workable.com/acme/j/123'), document);
+    expect(a.name).toBe('workable');
+  });
+
+  it('picks icims by hostname', () => {
+    const a = pickAdapter(new URL('https://acme.icims.com/jobs/123/apply'), document);
+    expect(a.name).toBe('icims');
+  });
+
+  it('picks smartrecruiters by hostname', () => {
+    const a = pickAdapter(new URL('https://jobs.smartrecruiters.com/acme/123'), document);
+    expect(a.name).toBe('smartrecruiters');
+  });
+
+  it('picks bamboohr by hostname', () => {
+    const a = pickAdapter(new URL('https://acme.bamboohr.com/careers/123'), document);
+    expect(a.name).toBe('bamboohr');
+  });
 });
 
 describe('Lever-style name attributes', () => {

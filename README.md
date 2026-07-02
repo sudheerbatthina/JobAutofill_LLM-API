@@ -5,8 +5,9 @@ profile you set up once. Per‑field, review‑before‑submit, never auto‑sub
 Optional Claude assist drafts answers to free‑text/essay questions and parses your
 resume PDF into a profile — using **your own** Anthropic API key, stored locally.
 
-Built for US STEM applications: Greenhouse, Lever, Workday, and a generic
-heuristic adapter that works on most company career pages.
+Built for US STEM applications: Greenhouse, Lever, Workday, Ashby, Workable,
+iCIMS, SmartRecruiters, BambooHR, and a generic heuristic adapter that works
+on most company career pages.
 
 ## How it works
 
@@ -31,7 +32,8 @@ entrypoints/
   options/          profile editor, resume upload, API key
 lib/
   profile/          schema (zod) · storage (chrome.storage) · resume pdf.js + prompt
-  ats/              adapters: generic · greenhouse · lever · workday · registry
+  ats/              adapters: generic · greenhouse · lever · workday · ashby ·
+                    workable · icims · smartrecruiters · bamboohr · registry
   fields/           detect (label + classify) · resolve (profile→value) · inject (React-safe)
   llm/              claude (fetch client) · essay + messaging contracts
   ui/               per-field overlay (Shadow DOM)

@@ -130,6 +130,28 @@ describe('application page gating', () => {
     setBody('<form><h1>Submit application</h1><label>Resume</label><input type="file" /></form>');
     expect(hasApplicationContext(document, 1)).toBe(true);
   });
+
+  it('does not activate on a third-party resume editor/builder tool', () => {
+    document.title = 'Resume Editor';
+    setBody(`
+      <main>
+        <h1>Sudheer Kumar Reddy</h1>
+        <input aria-label="Email" />
+        <input aria-label="LinkedIn" />
+        <input aria-label="GitHub" />
+        <h2>Professional Summary</h2>
+        <textarea aria-label="Professional Summary"></textarea>
+        <h2>Technical Skills</h2>
+      </main>
+    `);
+    expect(hasApplicationContext(document, 3)).toBe(false);
+  });
+
+  it('does not activate on a bare mention of "resume" without other context', () => {
+    document.title = 'Contact us';
+    setBody('<form><label>Name</label><input /><label>Message</label><textarea>Attach your resume</textarea></form>');
+    expect(hasApplicationContext(document, 1)).toBe(false);
+  });
 });
 
 describe('generic adapter detection (Greenhouse-like form)', () => {
