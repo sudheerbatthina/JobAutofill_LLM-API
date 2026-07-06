@@ -5,3 +5,7 @@ node_modules/
 .chrome-extension-profile/
 *.local
 .DS_Store
+
+# Store submission credentials — never commit
+.env
+.env.submit

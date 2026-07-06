@@ -2,7 +2,7 @@
   "name": "wxt-react-starter",
   "description": "manifest.json description",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "scripts": {
     "dev": "wxt",
@@ -11,6 +11,8 @@
     "build:firefox": "wxt build -b firefox",
     "zip": "wxt zip",
     "zip:firefox": "wxt zip -b firefox",
+    "submit:init": "wxt submit init",
+    "submit": "wxt submit --chrome-zip .output/*-chrome.zip",
     "compile": "tsc --noEmit",
     "test": "vitest run",
     "postinstall": "wxt prepare"
